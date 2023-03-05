@@ -1,18 +1,10 @@
 #include "Node.hpp"
-#include <fstream>
+#include "huffman.h"
 #include <unordered_map>
 #include <vector>
 #include <algorithm>
 #include <cstring>
 using namespace std;
-
-#define codeLen 16
-#define byteLen 8
-
-struct charCode {
-    char ch;
-    char code[codeLen]; // why did i decide on 16?
-};
 
 void treeToMap(unordered_map<char, string> &codes, string currentCode, Node* node) {
     if (node == nullptr) {
@@ -68,28 +60,59 @@ struct less_then {
     } 
 };
 
+/*
+Multiply each character's code with it's frequency to determine number of required bits
+and calculate the required padding to fill a whole byte.
+*/
+int calcPadding(unordered_map<char, string>& codes ,unordered_map<char, int>& frequencyMap) {
+    long sum = 0;
+    for (auto pair : codes) {
+        sum += pair.second.size() * frequencyMap[pair.first];
+    }
+    return byteLen - (sum % 8);
+}
+
 int main(int argc, char const *argv[]) {
+    if (argc != 3) {
+        printf("Usage: ./compress <file name> <output file name>\n");
+        return -1;
+    }
+
+    char* inputFileName = (char*)malloc(sizeof(char)*strlen(argv[1]));
+    strcpy(inputFileName, argv[1]);
+
+    char* outputFileName = (char*)malloc(sizeof(char)*strlen(argv[2]));
+    strcpy(outputFileName, argv[2]);
+
+    FILE *inputFile = fopen(inputFileName, "r");
+    if (inputFile == NULL) {
+        printf("Failed to open input file\n");
+        return -1;
+    }
+
+    FILE *outputFile = fopen(outputFileName, "w");
+    if (outputFile == NULL) {
+        printf("Failed to open output file\n");
+        return -1;
+    }
+
     /*
     Begin by reading the file and constructing a hashmap containing the letters
     and their frequencies - eg - [ (A:3), (B:8), ... , (Z:2) ]
     */
-    unordered_map<char, int> hm;
-    string line;
-    ifstream fin;
-    fin.open("test_file.txt");
-    while (getline(fin, line)) {
-        for (char ch : line) {
-            if (hm.find(ch) == hm.end()) {
-                hm[ch] = 1;
-            } else {
-                hm[ch]++;
-            }
+    char ch = 0;
+    unordered_map<char, int> frequencyMap;
+    while (fread(&ch, sizeof(char), 1, inputFile) != 0u) {
+        if (frequencyMap.find(ch) == frequencyMap.end()) {
+            frequencyMap[ch] = 1;
+        } else {
+            frequencyMap[ch]++;
         }
     }
 
     // Construct the leaf nodes of the Huffman binary tree.
     vector<Node*> nodes;
-    for (auto pair : hm) {
+    for (auto pair : frequencyMap) {
         nodes.emplace_back(new Node(pair.first, pair.second));
     }
 
@@ -126,14 +149,17 @@ int main(int argc, char const *argv[]) {
     // Traverse the Huffman tree and generate a map of letters with their respective codes.
     unordered_map<char, string> codes = treeToMap(root);
 
-    FILE *outputFile = fopen("test_file_encoded.txt", "w");
+
+    // write number of padding bits that will fill the last byte.
+    int padding = calcPadding(codes, frequencyMap);
+    fwrite(&padding, sizeof(char), 1, outputFile);
 
     // write number of unique characters.
-    int numUnique = codes.size();
+    int numUnique = codes.size() == 256 ? 0 : codes.size(); // if 256 alias as 0 (because 256 is 9 bits)
     fwrite(&numUnique, sizeof(char), 1, outputFile);
 
     // write the characters and their codes.
-    charCode cC;
+    charCode cC{};
     for (auto pair : codes) {
         cC.ch = pair.first;
         strcpy(cC.code, pair.second.data());
@@ -143,39 +169,36 @@ int main(int argc, char const *argv[]) {
         }
     }
 
-    fin.clear();
-    fin.seekg(0, ios::beg);
+    // write encoded content
+    fseek(inputFile, 0, SEEK_SET);
     int currentBit = 0;
-    int bitBuffer = 0;
+    unsigned char bitBuffer = 0;
     string code;
-    while (getline(fin, line)) {
-        for (char ch : line) {
-            code = codes[ch];
-            for (char bit : code) {
-                int ibit = bit - '0';
-                if (ibit) {
-                    bitBuffer = bitBuffer + (1 << (byteLen - 1 - currentBit));
-                }
-                currentBit++;
-                if (currentBit == byteLen) {
-                    fwrite(&bitBuffer, 1, 1, outputFile);
-                    cout << bitBuffer << endl;
-                    currentBit = 0;
-                    bitBuffer = 0;
-                }
+    while (fread(&ch, sizeof(char), 1, inputFile)) {
+        code = codes[ch];
+        for (char bit : code) {
+            int ibit = bit - '0';
+            if (ibit) {
+                bitBuffer = bitBuffer + (1 << (byteLen - 1 - currentBit));
+            }
+            currentBit++;
+            if (currentBit == byteLen) {
+                fwrite(&bitBuffer, sizeof(char), 1, outputFile);
+                currentBit = 0;
+                bitBuffer = 0;
             }
         }
     }
+    // write padding
     while (1) {
         currentBit++;
         if (currentBit == byteLen) {
-            fwrite(&bitBuffer, 1, 1, outputFile);
-            cout << bitBuffer << endl;
+            fwrite(&bitBuffer, sizeof(char), 1, outputFile);
             break;
         }
     }
 
-    fin.close();
+    fclose(inputFile);
     fclose(outputFile);
     return 0;
 }

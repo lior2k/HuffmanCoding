@@ -1,55 +1,80 @@
 #include "Node.hpp"
-#include <fstream>
+#include "huffman.h"
+#include <cstring>
 #include <unordered_map>
-using namespace std;
-
-#define codeLen 16
-#define byteLen 8
-
-struct charCode {
-    char ch;
-    char code[codeLen]; // why did i decide on 16?
-};
 
 int main(int argc, char const *argv[]) {
-    FILE* inputFile = fopen("test_file_encoded.txt", "rb");
+    if (argc != 3) {
+        printf("Usage: ./decompress <file name> <output file name>\n");
+        return -1;
+    }
+
+    char* inputFileName = (char*)malloc(sizeof(char)*strlen(argv[1]));
+    strcpy(inputFileName, argv[1]);
+
+    char* outputFileName = (char*)malloc(sizeof(char)*strlen(argv[2]));
+    strcpy(outputFileName, argv[2]);
+
+    FILE* inputFile = fopen(inputFileName, "rb");
+    if (inputFile == NULL) {
+        printf("Failed to open input file\n");
+        return -1;
+    }
+
+    FILE *outputFile = fopen(outputFileName, "w");
+    if (outputFile == NULL) {
+        printf("Failed to open output file\n");
+        return -1;
+    }
+
+    int padding = 0;
+    fread(&padding, sizeof(char), 1, inputFile);
+    printf("Padding: %d\n", padding);
+
     int numUnique = 0;
     fread(&numUnique, sizeof(char), 1, inputFile);
-
     printf("Unique characters: %d\n", numUnique);
+    if (numUnique == 0) numUnique = 256;
 
-    unordered_map<string, char> codes;
+    std::unordered_map<std::string, char> codes;
     for (unsigned int i = 0; i < numUnique; i++) {
         charCode cC;
         fread(&cC, sizeof(charCode), 1, inputFile);
-        string code(cC.code);
+        std::string code(cC.code);
         codes[code] = cC.ch;
     }
 
-    printf("Map:\n");
-    for (auto pair : codes) {
-        cout << "[" << pair.first << "," << pair.second << "]" << endl;
-    }
+    // printf("Map:\n");
+    // for (auto pair : codes) {
+    //     std::cout << "[" << pair.first << "," << pair.second << "]" << std::endl;
+    // }
 
-    FILE *outputFile = fopen("test_file_decoded.txt", "w");
-
-    string code = "";
-    int currentBit;
+    int numIterations = 0;
     char byte = 0;
-    while (fread(&byte, 1, 1, inputFile)) {
-        printf("%d\n", byte);
+    while(fread(&byte, sizeof(char), 1, inputFile) != 0u) numIterations++;
+    fseek(inputFile, -sizeof(char)*numIterations, SEEK_CUR);
+    printf("Num iterations: %d\n", numIterations);
+
+    std::string code;
+    int currentBit = 0;
+    int currentIter = 0;
+    byte = 0;
+    while (fread(&byte, sizeof(char), 1, inputFile)) {
+        currentIter++;
         for (unsigned int bitCount = 0; bitCount < byteLen; bitCount++) {
-            currentBit = (byte >> (7 - bitCount) & 1);
-            printf("%d ", currentBit);
-            code.append(to_string(currentBit));
+            // last iteration -> discard padding
+            if (currentIter == numIterations && bitCount == byteLen - padding) { 
+                break;
+            }
+            currentBit = (byte >> (byteLen - 1 - bitCount) & 1);
+            code.append(std::to_string(currentBit));
             if (codes.find(code) != codes.end()) {
-                fwrite(&codes[code], 1, 1, outputFile);
-                printf("%c", codes[code]);
+                fwrite(&codes[code], sizeof(char), 1, outputFile);
                 code.clear();
             }
         }
-        printf("\n");
     }
+
     fclose(outputFile);
     fclose(inputFile);
     return 0;

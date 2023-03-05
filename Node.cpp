@@ -30,7 +30,7 @@ bool Node::operator < (const Node &other) const {
     return this->getFrequency() < other.getFrequency();
 }
 
-std::ostream & operator << (std::ostream &os, Node *node) {
-    os << "[" << node->getChar() << "," << node->getFrequency() << "]";
+std::ostream & Node::operator << (std::ostream &os) {
+    os << "[" << this->getChar() << "," << this->getFrequency() << "]";
     return os;
 }

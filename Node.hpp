@@ -18,6 +18,6 @@ class Node {
         Node *getRight() const;
 
         bool operator < (const Node &other) const;
-};
 
-std::ostream & operator << (std::ostream &os, Node *node);
+        std::ostream & operator << (std::ostream &os);
+};
