@@ -65,7 +65,7 @@ Multiply each character's code with it's frequency to determine number of requir
 and calculate the required padding to fill a whole byte.
 */
 int calcPadding(unordered_map<char, string>& codes ,unordered_map<char, int>& frequencyMap) {
-    long sum = 0;
+    unsigned long sum = 0;
     for (auto pair : codes) {
         sum += pair.second.size() * frequencyMap[pair.first];
     }
@@ -84,15 +84,17 @@ int main(int argc, char const *argv[]) {
     char* outputFileName = (char*)malloc(sizeof(char)*strlen(argv[2]));
     strcpy(outputFileName, argv[2]);
 
+    printf("Opening input file '%s'\n", inputFileName);
     FILE *inputFile = fopen(inputFileName, "r");
     if (inputFile == NULL) {
-        printf("Failed to open input file\n");
+        printf("Failed to open input file '%s'\n", inputFileName);
         return -1;
     }
 
+    printf("Opening output file '%s'\n", outputFileName);
     FILE *outputFile = fopen(outputFileName, "w");
     if (outputFile == NULL) {
-        printf("Failed to open output file\n");
+        printf("Failed to open output file '%s'\n", outputFileName);
         return -1;
     }
 
@@ -100,6 +102,7 @@ int main(int argc, char const *argv[]) {
     Begin by reading the file and constructing a hashmap containing the letters
     and their frequencies - eg - [ (A:3), (B:8), ... , (Z:2) ]
     */
+    printf("Reading input file - creating huffman nodes\n");
     char ch = 0;
     unordered_map<char, int> frequencyMap;
     while (fread(&ch, sizeof(char), 1, inputFile) != 0u) {
@@ -116,9 +119,9 @@ int main(int argc, char const *argv[]) {
         nodes.emplace_back(new Node(pair.first, pair.second));
     }
 
+    printf("Generating frequency tree\n");
     // Sort the nodes.
     sort(nodes.begin(), nodes.end(), less_then());
-
     // Construct the binary tree in buttom up manner by combining two of
     // the lowest frequency nodes each iteration. 
     while(nodes.size() > 1) {
@@ -147,11 +150,14 @@ int main(int argc, char const *argv[]) {
     Node *root = nodes[0];
 
     // Traverse the Huffman tree and generate a map of letters with their respective codes.
+    printf("Creating char->code map\n");
     unordered_map<char, string> codes = treeToMap(root);
 
 
     // write number of padding bits that will fill the last byte.
+    printf("Calculating padding\n");
     int padding = calcPadding(codes, frequencyMap);
+    printf("Writing file header:\n");
     fwrite(&padding, sizeof(char), 1, outputFile);
 
     // write number of unique characters.
@@ -168,13 +174,15 @@ int main(int argc, char const *argv[]) {
             cout << "warning: code " << pair.second << "length > 16" << endl;
         }
     }
+    printf("Padding: %d\nCharacters: %d\n%d charCode structs\n", padding, numUnique, numUnique);
 
     // write encoded content
+    printf("Writing encoded data\n");
     fseek(inputFile, 0, SEEK_SET);
     int currentBit = 0;
     unsigned char bitBuffer = 0;
     string code;
-    while (fread(&ch, sizeof(char), 1, inputFile)) {
+    while (fread(&ch, sizeof(char), 1, inputFile) ) {
         code = codes[ch];
         for (char bit : code) {
             int ibit = bit - '0';

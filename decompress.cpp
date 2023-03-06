@@ -15,15 +15,17 @@ int main(int argc, char const *argv[]) {
     char* outputFileName = (char*)malloc(sizeof(char)*strlen(argv[2]));
     strcpy(outputFileName, argv[2]);
 
+    printf("Opening input file '%s'\n", inputFileName);
     FILE* inputFile = fopen(inputFileName, "rb");
     if (inputFile == NULL) {
-        printf("Failed to open input file\n");
+        printf("Failed to open input file '%s'\n", inputFileName);
         return -1;
     }
 
+    printf("Opening output file '%s'\n", outputFileName);
     FILE *outputFile = fopen(outputFileName, "w");
     if (outputFile == NULL) {
-        printf("Failed to open output file\n");
+        printf("Failed to open output file '%s'\n", outputFileName);
         return -1;
     }
 
